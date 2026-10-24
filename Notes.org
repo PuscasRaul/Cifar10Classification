@@ -1,0 +1,44 @@
+#+title: Notes
+
+* Table of contents :toc:
+- [[#reading-list][Reading list]]
+  - [[#feature-extraction][Feature extraction]]
+  - [[#unsupervised-and-random-feature-learning][Unsupervised and random feature learning]]
+  - [[#scattering-transforms][Scattering transforms]]
+  - [[#trees-on-image-features][Trees on image features]]
+  - [[#rigor-and-methodology][Rigor and methodology]]
+  - [[#from-earlier-trees-ensembles-pca-boosting][From earlier (trees, ensembles, PCA, boosting)]]
+
+* Reading list
+** Feature extraction
+1. [core] Dalal & Triggs, "Histograms of Oriented Gradients for Human Detection" (CVPR 2005)
+2. [core] Ojala, Pietikäinen & Mäenpää, "Multiresolution Gray-Scale and Rotation Invariant Texture Classification with Local Binary Patterns" (TPAMI 2002)
+3. [optional] Oliva & Torralba, "Modeling the Shape of the Scene: A Holistic Representation of the Spatial Envelope" (IJCV 2001), the GIST paper
+4. [optional] Csurka et al., "Visual Categorization with Bags of Keypoints" (2004)
+5. [optional] Lowe, "Distinctive Image Features from Scale-Invariant Keypoints" (IJCV 2004), for SIFT background
+
+** Unsupervised and random feature learning
+1. [core] Coates, Ng & Lee, "An Analysis of Single-Layer Networks in Unsupervised Feature Learning" (AISTATS 2011)
+2. [core] Coates & Ng, "The Importance of Encoding Versus Training with Sparse Coding and Vector Quantization" (ICML 2011)
+3. [core] Jarrett et al., "What is the Best Multi-Stage Architecture for Object Recognition?" (ICCV 2009)
+4. [core] Saxe et al., "On Random Weights and Unsupervised Feature Learning" (ICML 2011)
+5. [optional] Coates & Ng, "Learning Feature Representations with K-means" (2012), practical details on whitening and k-means
+
+** Scattering transforms
+1. [core] Bruna & Mallat, "Invariant Scattering Convolution Networks" (TPAMI 2013)
+2. [core] Oyallon & Mallat, "Deep Roto-Translation Scattering for Object Classification" (CVPR 2015)
+3. [optional] Oyallon et al., "Scattering Networks for Hybrid Representation Learning" (TPAMI 2018)
+** Trees on image features
+1. [core] Bosch, Zisserman & Muñoz, "Image Classification Using Random Forests and Ferns" (ICCV 2007). It's the most direct precedent for your project.
+2. [optional] Frosst & Hinton, "Distilling a Neural Network Into a Soft Decision Tree" (2017)
+
+** Rigor and methodology
+1. [core] Demšar, "Statistical Comparisons of Classifiers over Multiple Data Sets" (JMLR 2006)
+2. [core] Dietterich, "Approximate Statistical Tests for Comparing Supervised Classification Learning Algorithms" (Neural Computation 1998)
+3. [core] Bergstra & Bengio, "Random Search for Hyper-Parameter Optimization" (JMLR 2012)
+4. [core] Bouthillier et al., "Accounting for Variance in Machine Learning Benchmarks" (MLSys 2021)
+5. [core] Recht et al., "Do CIFAR-10 Classifiers Generalize to CIFAR-10?" (2018). It gives you CIFAR-10.1 as an extra test set.
+6. [optional] Fernández-Delgado et al., "Do We Need Hundreds of Classifiers to Solve Real World Classification Problems?" (JMLR 2014)
+
+** From earlier (trees, ensembles, PCA, boosting)
+Breiman (CART 1984, RF 2001), Quinlan (ID3/C4.5), Geurts (Extra-Trees), Rodríguez (Rotation Forest), Bengio et al. 2010, Friedman 2001, XGBoost, LightGBM, CatBoost, Halko et al. 2011, Murthy (OC1), Tomita (SPORF), and ESL Ch. 9, 10, 15.
