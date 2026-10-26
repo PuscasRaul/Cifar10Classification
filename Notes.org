@@ -8,6 +8,7 @@
   - [[#trees-on-image-features][Trees on image features]]
   - [[#rigor-and-methodology][Rigor and methodology]]
   - [[#from-earlier-trees-ensembles-pca-boosting][From earlier (trees, ensembles, PCA, boosting)]]
+- [[#pca][PCA]]
 
 * Reading list
 ** Feature extraction
@@ -42,3 +43,6 @@
 
 ** From earlier (trees, ensembles, PCA, boosting)
 Breiman (CART 1984, RF 2001), Quinlan (ID3/C4.5), Geurts (Extra-Trees), Rodríguez (Rotation Forest), Bengio et al. 2010, Friedman 2001, XGBoost, LightGBM, CatBoost, Halko et al. 2011, Murthy (OC1), Tomita (SPORF), and ESL Ch. 9, 10, 15.
+
+* PCA
+        Pentru algoritmul PCA initial trebuie sa aplicam o transformare liniara astfel incat originea sa reprezinte centroidul datelor.
