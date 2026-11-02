@@ -4,11 +4,12 @@ import numpy as np
 from numpy.typing import NDArray
 import enum
 
+from src.core.Classifier import Classifier
+
 
 class StoppageHeuristic(enum.Enum):
     DEPTH = 0,
     LEAF_SIZE = 1,
-    NO_OF_NODES = 2,
     LOSS_FUNCTION_DECREASE = 3
 
 
@@ -28,7 +29,7 @@ class Node():
         self._value = value
 
 
-class DecisionTree():
+class DecisionTree(Classifier):
     _dt: Node | None = None
     _heuristics: dict[StoppageHeuristic, Any] = {}
 
@@ -39,7 +40,24 @@ class DecisionTree():
             y: NDArray
     ) -> None:
         self._heuristics = heuristics
-        self._dt = self._split(x, y)
+
+    def fit(self, x, y):
+        self._dt = self._split(x, y, 0)
+
+    def predict(self, x):
+        if self._dt is None:
+            raise ValueError(
+                "The classifier has not been fitted to a dataset yet"
+            )
+        return self._walk_tree(self._dt, x)
+
+    def _walk_tree(self, node, x):
+        if self._is_leaf(node):
+            return node._value
+
+        if x[node._feature_index] <= node._threshold:
+            return self._walk_tree(x, node._left)
+        return self._walk_tree(x, node._right)
 
     def _split(self, x: NDArray, y: NDArray, current_depth: int) -> Node | None:
         '''
@@ -58,7 +76,7 @@ class DecisionTree():
         And somehow, at the end
         Make the big fucking tree
         '''
-        if self._check_finalized_condition(current_depth, y) is True:
+        if self._check_finalized_condition(current_depth, x, 0) is True:
             return Node(value=self._most_common_label(y))
 
         best_gain = -1
@@ -89,8 +107,8 @@ class DecisionTree():
 
         x_left, y_left = x[best_left_mask], y[best_left_mask]
         x_right, y_right = x[best_right_mask], y[best_right_mask]
-        left_child = self._split(x_left, y_left)
-        right_child = self._split(x_right, y_right)
+        left_child = self._split(x_left, y_left, current_depth + 1)
+        right_child = self._split(x_right, y_right, current_depth + 1)
         return Node(feature_index=best_feature_idx,
                     threshold=best_threshold,
                     left=left_child,
@@ -127,46 +145,61 @@ class DecisionTree():
                 h -= p * np.log2(p)
         return h
 
-    def _check_finalized_condition(self, current_depth, y):
+    def _check_finalized_condition(
+            self,
+            current_depth,
+            x,
+            current_loss
+    ):
         keys = self._heuristics.keys()
         for key in keys:
             match key:
                 case StoppageHeuristic.DEPTH:
                     value = self._heuristics[key]
-                    if self._apply_depth_criterion(value) is False:
-                        return False
-                    continue
-                case StoppageHeuristic.NO_OF_NODES:
-                    value = self._heuristics[key]
-                    if self._apply_nodes_criterion(value) is False:
+                    if self._apply_depth_criterion(
+                            value,
+                            current_depth
+                    ) is False:
                         return False
                     continue
                 case StoppageHeuristic.LEAF_SIZE:
                     value = self._heuristics[key]
-                    if self._apply_leaf_criterion(value) is False:
+                    if self._apply_leaf_criterion(x, value) is False:
                         return False
                     continue
                 case StoppageHeuristic.LOSS_FUNCTION_DECREASE:
                     value = self._heuristics[key]
-                    if self._apply_loss_criterion(value) is False:
+                    if self._apply_loss_criterion(current_loss, value) is False:
                         return False
                     continue
                 case _:
                     return False
         return True
 
-    def _apply_depth_criterion(self, tree_depth) -> bool:
+    def _apply_depth_criterion(self, tree_depth, current_depth) -> bool:
+        if tree_depth <= current_depth:
+            return True
         return False
 
-    def _apply_nodes_criterion(self, no_of_nodes) -> bool:
+    def _apply_leaf_criterion(self, x, leaf_size) -> bool:
+        no_of_items = len(x)
+        if no_of_items < leaf_size:
+            return True
         return False
 
-    def _apply_leaf_criterion(self, leaf_size) -> bool:
+    def _apply_loss_criterion(self, current_loss, loss) -> bool:
+        if current_loss <= loss:
+            return True
         return False
 
-    def _apply_loss_criterion(self, loss) -> bool:
-        return False
-
-    def _most_common_label(y) -> Any:
+    def _most_common_label(self, y) -> Any:
         values = np.unique(y, return_counts=True)
         return values[0]
+
+    def _is_leaf(self, node: Node) -> bool:
+        return (node._left is None and node._right is None)
+
+    def _count_nodes(self, node) -> int:
+        if node is None:
+            return 0
+        return 1 + self._count_nodes(node._left) + self._count_nodes(node._right)
