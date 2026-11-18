@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
-class Classifier(ABC):
+class IClassifier(ABC):
     def __init__() -> None:
         return None
 

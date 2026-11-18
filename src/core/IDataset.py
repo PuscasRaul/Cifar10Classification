@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
-class Dataset(ABC):
+class IDataset(ABC):
     _x: list[Any] = []
     _y: list[Any] = []
 

@@ -4,7 +4,7 @@ import numpy as np
 from numpy.typing import NDArray
 import enum
 
-from src.core.Classifier import Classifier
+from src.core.Classifier.IClassifier import IClassifier
 
 
 class StoppageHeuristic(enum.Enum):
@@ -29,15 +29,13 @@ class Node():
         self._value = value
 
 
-class DecisionTree(Classifier):
+class DecisionTree(IClassifier):
     _dt: Node | None = None
     _heuristics: dict[StoppageHeuristic, Any] = {}
 
     def __init__(
             self,
             heuristics: dict[StoppageHeuristic, Any],
-            x: NDArray,
-            y: NDArray
     ) -> None:
         self._heuristics = heuristics
 
