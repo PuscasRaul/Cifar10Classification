@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import pickle
 import numpy as np
+from numpy.typing import NDArray
 from typing import Any
 
 from src.core.IDataset import IDataset
@@ -21,10 +22,10 @@ class CifarDataset(IDataset):
         )
         self._y = self._get_labels(_database_dict)
 
-    def get_X(self) -> list[Any]:
+    def get_X(self) -> NDArray:
         return self._x
 
-    def get_Y(self) -> list[Any]:
+    def get_Y(self) -> NDArray:
         return self._y
 
     def _unpickle(self, file: str) -> dict[Any, Any]:
@@ -33,9 +34,9 @@ class CifarDataset(IDataset):
         return dict
 
     def _get_labels(self, dataset) -> list[int]:
-        return dataset[b'labels']
+        return np.array(dataset[b'labels'])
 
     def _get_images(self, dataset):
-        rows = dataset[b'data']
+        rows = np.array(dataset[b'data'])
         return rows
 

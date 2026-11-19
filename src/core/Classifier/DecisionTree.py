@@ -29,6 +29,7 @@ class Node():
         self._value = value
 
 
+# TODO: Speed this shit up
 class DecisionTree(IClassifier):
     _dt: Node | None = None
     _heuristics: dict[StoppageHeuristic, Any] = {}
@@ -57,6 +58,8 @@ class DecisionTree(IClassifier):
             return self._walk_tree(x, node._left)
         return self._walk_tree(x, node._right)
 
+    # TODO: Check for bug, it seems like gain seems content on remaining
+    # 0.0
     def _split(self, x: NDArray, y: NDArray, current_depth: int) -> Node | None:
         '''
         The main idea is given the original set S
@@ -87,6 +90,12 @@ class DecisionTree(IClassifier):
         for i in range(n_dimensions):
             feature_column = x[:, i]
             unique_values = np.unique(feature_column)
+            # Here, I think we can get away without computing information gain
+            # For absolutely each and every one of the thresholds
+            # Since we already filter by unique values, the only one that moves
+            # To the right would be just one of them, right?
+            # So with one small addition, after I look over the IG process
+            # We should do it
             for threshold in unique_values:
                 left_mask = feature_column <= threshold
                 right_mask = feature_column > threshold
@@ -132,7 +141,7 @@ class DecisionTree(IClassifier):
         return np.float32(h_s - (weighted_left + weighted_right))
 
     def _entropy(self, labels: NDArray) -> np.float32:
-        if len(labels == 0):
+        if labels.size == 0:
             return 0.0
         _, counts = np.unique(labels, return_counts=True)
         probs = counts / len(labels)

@@ -3,6 +3,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from src.core.FeatureExtraction.IFeatureExtractor import IFeatureExtractor
+from src.core.models.Settings import settings
 
 
 class HandcraftedFeatureExtractor(IFeatureExtractor):
@@ -16,7 +17,8 @@ class HandcraftedFeatureExtractor(IFeatureExtractor):
 
     def feature_extraction(self) -> NDArray | None:
         self._arr = self._hog_features()
-        return self.PCA()
+        primary_components = self.PCA()
+        return np.matmul(self._arr, primary_components)
 
     def _hog_features(self) -> NDArray:
         """
