@@ -7,6 +7,7 @@ from numpy import linalg as LA
 
 from src.core.models.Settings import settings
 
+
 class IFeatureExtractor(ABC):
     def __init__(self, arr: NDArray, k: int) -> None:
         self._arr = arr
@@ -51,8 +52,6 @@ class IFeatureExtractor(ABC):
 
     def _plot_information_conservation(self, principal_values: NDArray):
         ratios = np.cumsum(principal_values) / np.sum(principal_values)
-        # Why is this descending in the plot?
-        # It should keep on going upwards, not downwards?
         factors = ratios[0:self._k]
         plt.plot(
             range(1, len(factors) + 1),
