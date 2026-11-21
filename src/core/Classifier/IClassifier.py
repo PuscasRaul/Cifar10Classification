@@ -8,12 +8,12 @@ class IClassifier(ABC):
         return None
 
     @abstractmethod
-    def predict(self, x) -> Any:
+    async def predict(self, x) -> Any:
         return None
 
     '''
     Maybe have the metrics defined here
     '''
     @abstractmethod
-    def fit(self, x, y) -> None:
+    async def fit(self, x, y) -> None:
         return None

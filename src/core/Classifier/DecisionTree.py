@@ -63,7 +63,7 @@ class DecisionTree(IClassifier):
     def feature_importances(self) -> NDArray:
         return self._stats.importances
 
-    def fit(self, x, y):
+    async def fit(self, x, y):
         start = time.perf_counter()
         self._stats = TreeStats(
             n_train=len(y),

@@ -3,7 +3,6 @@ import numpy as np
 from numpy.typing import NDArray
 
 from src.core.FeatureExtraction.IFeatureExtractor import IFeatureExtractor
-from src.core.models.Settings import settings
 
 
 class HandcraftedFeatureExtractor(IFeatureExtractor):

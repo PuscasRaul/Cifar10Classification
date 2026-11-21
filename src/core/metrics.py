@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 def predict_many(model, x: NDArray) -> NDArray:
-    # your predict() takes a single sample
     return np.array([model.predict(row) for row in x])
 
 

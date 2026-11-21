@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
+import asyncio
 import glob as gl
+import logging
 import os
+import matplotlib.pyplot
 from typing import Any
 
 from src.core.CifarDataset import CifarDataset
@@ -8,9 +11,19 @@ from src.core.Classifier.DecisionTree import DecisionTree, StoppageHeuristic
 from src.core.FeatureExtraction.HandcraftedFeatureExtractor import (
     HandcraftedFeatureExtractor
 )
-from src.core.metrics import evaluate, plot_feature_importance, depth_sweep
+from src.core.Classifier.RandomForest import RandomForest
+from src.core.metrics import evaluate
 from src.core.models.Settings import settings
 from src.core.Preprocessing.PreprocessorV1 import PreprocessorV1
+
+pudb_logger = logging.getLogger("pudb")
+pudb_logger.setLevel(logging.INFO)
+pil_logger = logging.getLogger('PIL')
+pil_logger.setLevel(logging.INFO)
+matplotlib.pyplot.set_loglevel(level='warning')
+logging.basicConfig()
+logging.root.setLevel(logging.NOTSET)
+logging.basicConfig(level=logging.NOTSET)
 
 database_root_dir = os.path.abspath(settings.database_dir)
 databse_files = gl.glob(database_root_dir + "/" + "data_batch_[1-9]")
@@ -22,31 +35,38 @@ pre_processor = PreprocessorV1(32)
 
 # TODO: Maybe ask some AI about what depth is common
 stoppage: dict[StoppageHeuristic, Any] = {
-   StoppageHeuristic.DEPTH: 10
+   StoppageHeuristic.DEPTH: 15
 }
 
-# TODO: Add some traceability, show how the shit is performing etc etc
 
-for database in loaded_db:
-    processed = pre_processor.process_vectors(database.get_X())
-    # For the moment hardcode some values
-    # TODO: Change this so it does not take it as a constructor paramter
-    #       but rather as a function one for the feature extraction method
-    feature_extractor = HandcraftedFeatureExtractor(processed, 100)
-    features = feature_extractor.feature_extraction()
+# TODO: add plots that work for both DecisionTree + RandomForest
+async def _train(classifier, x, y):
+    await classifier.fit(x)
+    evaluate(classifier, x, y, "train")
 
-    y = database.get_Y()
-    classifier = DecisionTree(stoppage)
-    classifier.fit(features, y)
 
-    evaluate(classifier, features, y, "train")
-    plot_feature_importance(classifier.feature_importances)
+async def main():
+    for database in loaded_db:
+        processed = pre_processor.process_vectors(database.get_X())
+        feature_extractor = HandcraftedFeatureExtractor(processed, 100)
+        features = feature_extractor.feature_extraction()
+        y = database.get_Y()
 
-    for test in test_db:
-        x_test = test.get_X()
-        y_test = test.get_Y()
-        evaluate(classifier, x_test, y_test, "test")
-        depth_sweep(
-            lambda d: DecisionTree({StoppageHeuristic.DEPTH: d}),
-            features, y, x_test, y_test, depths=range(1, 12),
-        )
+        dt = DecisionTree(stoppage)
+        rf = RandomForest(10, stoppage, 0.45)
+
+        await _train(dt, features, y)
+        await _train(rf, features, y)
+
+        for test in test_db:
+            x_test = test.get_X()
+            test_processed = pre_processor.process_vectors(x_test)
+            test_features = feature_extractor.feature_extraction(
+                test_processed
+            )
+            y_test = test.get_Y()
+            evaluate(dt, test_features, y_test, "test")
+            evaluate(rf, test_features, y_test, "test")
+
+if __name__ == "__main__":
+    asyncio.run(main())
