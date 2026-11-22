@@ -49,10 +49,13 @@ class DecisionTree(IClassifier):
     def __init__(
             self,
             heuristics: dict[StoppageHeuristic, Any],
+            k_sample_dimensions: int | None = None
     ) -> None:
         self._dt: Node | None = None
         self._heuristics = heuristics
         self._stats = TreeStats()
+        self._k_sample_dim = k_sample_dimensions
+        self._rng = np.random.default_rng()
 
     @property
     def stats(self) -> TreeStats:
@@ -62,7 +65,7 @@ class DecisionTree(IClassifier):
     def feature_importances(self) -> NDArray:
         return self._stats.importances
 
-    def fit(self, x, y):
+    def fit(self, x: NDArray, y: NDArray):
         start = time.perf_counter()
         self._stats = TreeStats(
             n_train=len(y),
@@ -73,8 +76,8 @@ class DecisionTree(IClassifier):
         total = self._stats.importances.sum()
         if total > 0:
             self._stats.importances /= total  # normalise to sum to 1
-        self._stats.fit_time = time.perf_counter() - start
-        self._log_fit_summary()
+            self._stats.fit_time = time.perf_counter() - start
+            self._log_fit_summary()
 
     def predict(self, x):
         """
@@ -109,6 +112,7 @@ class DecisionTree(IClassifier):
         if best_feature_idx is None:
             return self._make_leaf(y, current_depth, "no gain")
 
+        # TODO: move this out of here, why are we applying this here?
         min_gain = self._heuristics.get(
             StoppageHeuristic.LOSS_FUNCTION_DECREASE
         )
@@ -138,57 +142,74 @@ class DecisionTree(IClassifier):
                     left=left_child,
                     right=right_child)
 
-    def _best_split(
-            self,
-            x: NDArray,
-            y_idx: NDArray,
-            n_classes: int
-    ) -> tuple[float, int | None, Any]:
-        n, d = x.shape
-        onehot = np.eye(n_classes)[y_idx]
-        total = onehot.sum(axis=0)
-        parent_h = float(self._entropy_from_counts(total[None, :],
-                                                   np.array([n]))[0])
+    def _best_split(self, x, y_idx, n_classes):
+        n, n_features = x.shape
 
-        left_n = np.arange(1, n, dtype=np.float64)
-        right_n = n - left_n
+        # Required for Random Forest
+        # set k_sample_dim = sqrt(n_features),
+        # don't ask it was in the Princeton course
+        # i forgot about the reasoning
+
+        if self._k_sample_dim is not None:
+            candidate_features = self._rng.choice(
+                    n_features,
+                    size=self._k_sample_dim,
+                    replace=False
+            )
+            candidate_features = np.ravel(candidate_features)
+        else:
+            candidate_features = range(n_features)
+        all_counts = np.bincount(y_idx, minlength=n_classes).tolist()
+        parent_entropy = self._entropy(all_counts, n)
 
         best_gain = 0.0
         best_feature = None
         best_threshold = None
 
-        for j in range(d):
-            col = x[:, j]
-            order = np.argsort(col, kind="stable")
-            xs = col[order]
+        for feature in candidate_features:
+            order = np.argsort(x[:, feature])
+            values = x[order, feature].tolist()
+            labels = y_idx[order].tolist()
 
-            valid = xs[:-1] < xs[1:]
-            if not valid.any():
-                continue
+            left = [0] * n_classes
+            right = list(all_counts)
 
-            left = np.cumsum(onehot[order], axis=0)[:-1]
-            right = total - left
+            for i in range(n - 1):
+                left[labels[i]] += 1
+                right[labels[i]] -= 1
 
-            child_h = (
-                left_n * self._entropy_from_counts(left, left_n)
-                + right_n * self._entropy_from_counts(right, right_n)
-            ) / n
-            gain = parent_h - child_h
-            gain[~valid] = -np.inf
+                if values[i] == values[i + 1]:
+                    continue
 
-            i = int(np.argmax(gain))
-            if gain[i] > best_gain:
-                best_gain = float(gain[i])
-                best_feature = j
-                best_threshold = xs[i]
+                n_left = i + 1
+                n_right = n - n_left
+                child_entropy = (
+                    n_left * self._entropy(left, n_left)
+                    + n_right * self._entropy(right, n_right)
+                ) / n
+                gain = parent_entropy - child_entropy
+
+                if gain > best_gain:
+                    best_gain = gain
+                    best_feature = int(feature)
+                    best_threshold = values[i]
 
         return best_gain, best_feature, best_threshold
 
-    @staticmethod
-    def _entropy_from_counts(counts: NDArray, totals: NDArray) -> NDArray:
-        p = counts / totals[:, None]
-        log_p = np.log2(p, out=np.zeros_like(p), where=p > 0)
-        return -(p * log_p).sum(axis=1)
+    def _entropy(self, counts: NDArray, no_of_labels: int) -> np.float32:
+        """
+        Compute entropy function.
+        @input counts: array, where each element represents the frequency of a
+                       label
+        @input no_of_labels: total number of labels
+        """
+        probs = [count / no_of_labels for count in counts]
+
+        h = 0.0
+        for p in probs:
+            if p > 0:
+                h -= p * np.log2(p)
+        return h
 
     def _check_finalized_condition(self, current_depth: int, n_samples: int):
         for key, value in self._heuristics.items():

@@ -7,33 +7,90 @@ from src.core.FeatureExtraction.IFeatureExtractor import IFeatureExtractor
 
 class HandcraftedFeatureExtractor(IFeatureExtractor):
 
-    def __init__(self, arr: NDArray, k: int) -> None:
+    def feature_extraction(self, x: NDArray) -> NDArray | None:
         """
-        @input: arr -> ndarray of x vectors
-        @input: k -> int to describe the amount of dimensions after PCA
+        Computes hog features and extracts the first sqrt(feature_dim) PC
+        @input x: vector of elements, where each element is flattened
         """
-        IFeatureExtractor.__init__(self, arr, k)
+        features = self._hog_features(x)  # K x no_of_hog_features
+        first_color_moments = self._first_color_moment(x)
+        second_color_moments = self._second_color_moment(
+            x,
+            first_color_moments
+        )
+        third_color_moments = self._third_color_moment(
+            x,
+            first_color_moments,
+            second_color_moments
+        )
 
-    def feature_extraction(self) -> NDArray | None:
-        self._arr = self._hog_features()
-        primary_components = self.PCA()
-        return np.matmul(self._arr, primary_components)
+        # I hope this works, but I can check I guess?
+        np.concatenate(
+            [
+                features,
+                first_color_moments,
+                second_color_moments,
+                third_color_moments
+            ],
+            axis=1
+        )
 
-    def _hog_features(self) -> NDArray:
+        primary_components = self.PCA(features)
+        return np.matmul(features, primary_components)
+
+    # TODO: this does not particularly pair well with HOG, since that
+    #       requires greyscale images
+    def _first_color_moment(self, x: NDArray) -> NDArray:
+        return np.mean(x, axis=(1, 2))
+
+    def _second_color_moment(
+            self,
+            x: NDArray,
+            first_color_moments: NDArray
+    ) -> NDArray:
+        """
+        So the first_color_moments are K x C
+            K-no of samples
+            C - mean per channel
+
+        So for variance, we need to also somehow collapse
+        those N x N internal axes to compute this
+        """
+
+        means = first_color_moments[:, None, None, :]
+        squared_variance = (x - means) ** 2
+        return np.sqrt(np.mean(squared_variance, axis=(1, 2)))
+
+    def _third_color_moment(
+            self,
+            x: NDArray,
+            first_color_moments: NDArray,
+            second_color_moments: NDArray
+    ) -> NDArray:
+        means = first_color_moments[:, None, None, :]
+        cubed_variance = (x - means) ** 3
+        cbrt_variance = np.cbrt(np.mean(cubed_variance, axis=(1, 2)))
+        return np.divide(cbrt_variance, second_color_moments)
+
+    def _hog_features(self, x: NDArray) -> NDArray:
         """
         Extract hog features from the input array
         """
-        features = [self._hog_descriptor(img) for img in self._arr]
+        features = [self._hog_descriptor(vec) for vec in x]
         return np.array(features)
 
     def _hog_descriptor(self, x: NDArray) -> NDArray:
+        if x.ndim == 2:
+            gray = x
+        else:
+            gray = cv2.cvtColor(x, cv2.COLOR_RGB2GRAY)
+        h, w = np.shape(gray)
         cell_size = 8
-        h, w = x.shape
         n_cells_y = h // cell_size
         n_cells_x = w // cell_size
-        x = x[:n_cells_y * 8, :n_cells_x * 8].astype(np.float32) / 255.0
+        gray = gray[:n_cells_y * 8, :n_cells_x * 8].astype(np.float32) / 255.0
 
-        patches = x.reshape(
+        patches = gray.reshape(
             n_cells_y, 8,
             n_cells_x, 8
         ).transpose(0, 2, 1, 3)

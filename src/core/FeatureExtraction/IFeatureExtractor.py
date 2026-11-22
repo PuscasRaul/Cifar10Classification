@@ -9,18 +9,16 @@ from src.core.models.Settings import settings
 
 
 class IFeatureExtractor(ABC):
-    def __init__(self, arr: NDArray, k: int) -> None:
-        self._arr = arr
-        self._k = k
+    def __init__(self) -> None:
         self._train_mean: NDArray | None = None
         self._std_dev: NDArray | None = None
         return None
 
     @abstractmethod
-    def feature_extraction(self) -> NDArray | None:
+    def feature_extraction(self, x: NDArray) -> NDArray | None:
         return None
 
-    def PCA(self) -> NDArray:
+    def PCA(self, x: NDArray) -> NDArray:
         '''
         PCA algorithm implementation
         input:
@@ -29,7 +27,8 @@ class IFeatureExtractor(ABC):
         output:
             y -> NDArray of principal axis components
         '''
-        arr = self._arr.astype(float)
+        no_of_dims = round(np.sqrt(np.shape(x)[1]))
+        arr = x.astype(float)
         if self._train_mean is None:
             mean = np.mean(arr, axis=0, keepdims=True)
             self._train_mean = mean
@@ -51,14 +50,18 @@ class IFeatureExtractor(ABC):
         eigenvalues = principal_values[order]
         principal_axis = np.array(principal_axis)
         if settings.show_plots is True:
-            self._plot_information_conservation(eigenvalues)
+            self._plot_information_conservation(eigenvalues, no_of_dims)
         principal_axis = principal_axis[:, order]
 
-        return np.array(principal_axis[:, :self._k])
+        return np.array(principal_axis[:, :no_of_dims])
 
-    def _plot_information_conservation(self, principal_values: NDArray):
+    def _plot_information_conservation(
+            self,
+            principal_values: NDArray,
+            no_of_dims: int
+    ):
         ratios = np.cumsum(principal_values) / np.sum(principal_values)
-        factors = ratios[0:self._k]
+        factors = ratios[0:no_of_dims]
         plt.plot(
             range(1, len(factors) + 1),
             factors,

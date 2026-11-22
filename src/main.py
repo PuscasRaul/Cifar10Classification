@@ -3,6 +3,7 @@ import glob as gl
 import logging
 import os
 import matplotlib.pyplot
+import numpy as np
 from typing import Any
 
 from src.core.CifarDataset import CifarDataset
@@ -31,41 +32,54 @@ loaded_db = [CifarDataset(file) for file in databse_files]
 test_db = [CifarDataset(test) for test in test_file]
 
 pre_processor = PreprocessorV1(32)
+feature_extractor = HandcraftedFeatureExtractor()
 
 # TODO: Maybe ask some AI about what depth is common
-stoppage: dict[StoppageHeuristic, Any] = {
+dt_stoppage: dict[StoppageHeuristic, Any] = {
+   StoppageHeuristic.DEPTH: 10
+}
+
+rf_stoppage: dict[StoppageHeuristic, Any] = {
    StoppageHeuristic.DEPTH: 15
 }
 
-
-# TODO: add plots that work for both DecisionTree + RandomForest
-def _train(classifier, x, y):
-    await classifier.fit(x, y)
-    evaluate(classifier, x, y, "train")
+NO_OF_FOREST_TREES = 50
 
 
 def main():
-    for database in loaded_db:
-        processed = pre_processor.process_vectors(database.get_X())
-        feature_extractor = HandcraftedFeatureExtractor(processed, 100)
-        features = feature_extractor.feature_extraction()
-        y = database.get_Y()
+    train_x = np.concatenate([db.get_X() for db in loaded_db], axis=0)
+    train_y = np.concatenate([db.get_Y() for db in loaded_db], axis=0)
 
-        dt = DecisionTree(stoppage)
-        rf = RandomForest(k=10, heuristic=stoppage, sample_ratio=0.45)
+    processed = pre_processor.process_vectors(train_x)
+    features = feature_extractor.feature_extraction(processed)
 
-        await _train(rf, features, y)
-        await _train(dt, features, y)
+    forest_trees = []
+    k_subsamples = round(np.sqrt(np.shape(features)[-1]))
+    for i in range(NO_OF_FOREST_TREES):
+        forest_trees.append(
+            DecisionTree(rf_stoppage,  k_subsamples)
+        )
 
-        for test in test_db:
-            x_test = test.get_X()
-            test_processed = pre_processor.process_vectors(x_test)
-            test_features = feature_extractor.feature_extraction(
-                test_processed
-            )
-            y_test = test.get_Y()
-            evaluate(dt, test_features, y_test, "test")
-            evaluate(rf, test_features, y_test, "test")
+    dt = DecisionTree(dt_stoppage)
+    rf = RandomForest(forest_trees, sample_ratio=0.50)
+
+    rf.fit(features, train_y)
+    dt.fit(features, train_y)
+
+    evaluate(dt, features, train_y, "train")
+    evaluate(rf, features, train_y, "train")
+    # TODO: extract that into a function atleast
+
+    test_x = np.concatenate([db.get_X() for db in test_db], axis=0)
+    test_y = np.concatenate([db.get_Y() for db in test_db], axis=0)
+
+    test_processed = pre_processor.process_vectors(test_x)
+    test_features = feature_extractor.feature_extraction(
+        test_processed
+    )
+
+    evaluate(dt, test_features, test_y, "test")
+    evaluate(rf, test_features, test_y, "test")
 
 
 if __name__ == "__main__":

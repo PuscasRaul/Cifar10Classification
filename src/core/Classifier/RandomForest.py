@@ -18,24 +18,17 @@ class RandomForest(IClassifier):
 
     def __init__(
             self,
-            k: int,
-            heuristic: dict[StoppageHeuristic, Any],
+            dt: Sequence[DecisionTree],
             sample_ratio: float | None
     ) -> None:
         """
         @param: k: number of trees to work with
         """
-        if k == 0:
-            raise ValueError("Number of trees must not be 0")
-        self._trees = []
-        for i in range(0, k):
-            self._trees.append(DecisionTree(heuristic))
+        self._trees = dt
         self._ratio = sample_ratio
 
     def predict(self, x) -> Any:
-        results = await asyncio.gather(
-            *(tree.predict(x) for tree in self._trees)
-        )
+        results = [tree.predict(x) for tree in self._trees]
         frequency: dict[int, int] = {}
         for i in range(len(results)):
             elem = frequency.get(results[i], -1)
