@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import asyncio
 import glob as gl
 import logging
 import os
@@ -40,12 +39,12 @@ stoppage: dict[StoppageHeuristic, Any] = {
 
 
 # TODO: add plots that work for both DecisionTree + RandomForest
-async def _train(classifier, x, y):
-    await classifier.fit(x)
+def _train(classifier, x, y):
+    await classifier.fit(x, y)
     evaluate(classifier, x, y, "train")
 
 
-async def main():
+def main():
     for database in loaded_db:
         processed = pre_processor.process_vectors(database.get_X())
         feature_extractor = HandcraftedFeatureExtractor(processed, 100)
@@ -53,10 +52,10 @@ async def main():
         y = database.get_Y()
 
         dt = DecisionTree(stoppage)
-        rf = RandomForest(10, stoppage, 0.45)
+        rf = RandomForest(k=10, heuristic=stoppage, sample_ratio=0.45)
 
-        await _train(dt, features, y)
         await _train(rf, features, y)
+        await _train(dt, features, y)
 
         for test in test_db:
             x_test = test.get_X()
@@ -68,5 +67,6 @@ async def main():
             evaluate(dt, test_features, y_test, "test")
             evaluate(rf, test_features, y_test, "test")
 
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

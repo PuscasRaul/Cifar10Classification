@@ -12,6 +12,8 @@ class IFeatureExtractor(ABC):
     def __init__(self, arr: NDArray, k: int) -> None:
         self._arr = arr
         self._k = k
+        self._train_mean: NDArray | None = None
+        self._std_dev: NDArray | None = None
         return None
 
     @abstractmethod
@@ -28,14 +30,18 @@ class IFeatureExtractor(ABC):
             y -> NDArray of principal axis components
         '''
         arr = self._arr.astype(float)
-        mean = np.mean(arr, axis=0, keepdims=True)
-        np.subtract(arr, mean, out=arr)
+        if self._train_mean is None:
+            mean = np.mean(arr, axis=0, keepdims=True)
+            self._train_mean = mean
+        np.subtract(arr, self._train_mean, out=arr)
 
-        variance_squared = np.mean(arr ** 2, axis=0, keepdims=True)
-        std_dev = np.sqrt(variance_squared)
-        std_dev[std_dev == 0] = 1.0
+        if self._std_dev is None:
+            variance_squared = np.mean(arr ** 2, axis=0, keepdims=True)
+            std_dev = np.sqrt(variance_squared)
+            std_dev[std_dev == 0] = 1.0
+            self._std_dev = std_dev
 
-        np.divide(arr, std_dev, out=arr)
+        np.divide(arr, self._std_dev, out=arr)
 
         transposed_array = np.transpose(arr)
         covariance = np.matmul(transposed_array, arr) / arr.shape[0]

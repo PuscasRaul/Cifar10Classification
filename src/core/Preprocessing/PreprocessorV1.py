@@ -21,7 +21,8 @@ class PreprocessorV1(IPreprocessor):
                  represents the same element, but transformed
         """
         x = [cv2.resize(vec, (self._size, self._size)) for vec in x]
-        x = [cv2.cvtColor(vec, cv2.COLOR_BGR2GRAY, vec) for vec in x]
+        # RGB2GRAY due to the way Cifar is ordered
+        x = [cv2.cvtColor(vec, cv2.COLOR_RGB2GRAY, vec) for vec in x]
         x = [cv2.GaussianBlur(vec, (3, 3), 0) for vec in x]
 
         return np.array(x)

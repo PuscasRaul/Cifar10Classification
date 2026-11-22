@@ -75,7 +75,7 @@ def plot_feature_importance(importances: NDArray, feature_names=None) -> None:
     plt.show()
 
 
-def depth_sweep(
+async def depth_sweep(
         make_model: Callable[[int], object],
         x_train, y_train, x_test, y_test,
         depths=range(1, 15),
@@ -83,7 +83,7 @@ def depth_sweep(
     train_acc, test_acc = [], []
     for d in depths:
         model = make_model(d)
-        model.fit(x_train, y_train)
+        await model.fit(x_train, y_train)
         train_acc.append(accuracy(y_train, predict_many(model, x_train)))
         test_acc.append(accuracy(y_test, predict_many(model, x_test)))
         logger.info("depth=%d train=%.3f test=%.3f", d, train_acc[-1], test_acc[-1])

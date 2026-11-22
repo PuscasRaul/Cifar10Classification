@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
+import enum
 import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any
+
 import numpy as np
 from numpy.typing import NDArray
-import enum
 
 from src.core.Classifier.IClassifier import IClassifier
 
@@ -13,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 class StoppageHeuristic(enum.Enum):
-    DEPTH = 0,
-    LEAF_SIZE = 1,
+    DEPTH = 0
+    LEAF_SIZE = 1
     LOSS_FUNCTION_DECREASE = 3
 
 
@@ -43,15 +44,13 @@ class TreeStats:
     importances: NDArray = field(default_factory=lambda: np.zeros(0))
 
 
-# TODO: Speed this shit up
 class DecisionTree(IClassifier):
-    _dt: Node | None = None
-    _heuristics: dict[StoppageHeuristic, Any] = {}
 
     def __init__(
             self,
             heuristics: dict[StoppageHeuristic, Any],
     ) -> None:
+        self._dt: Node | None = None
         self._heuristics = heuristics
         self._stats = TreeStats()
 
@@ -63,13 +62,13 @@ class DecisionTree(IClassifier):
     def feature_importances(self) -> NDArray:
         return self._stats.importances
 
-    async def fit(self, x, y):
+    def fit(self, x, y):
         start = time.perf_counter()
         self._stats = TreeStats(
             n_train=len(y),
             importances=np.zeros(x.shape[1]),
         )
-        self._dt = self._split(x, y, 0)
+        self._dt = self._split(np.asarray(x), np.asarray(y), 0)
 
         total = self._stats.importances.sum()
         if total > 0:
@@ -88,78 +87,119 @@ class DecisionTree(IClassifier):
         return self._walk_tree(self._dt, x)
 
     def _walk_tree(self, node, x):
-        if self._is_leaf(node):
-            return node._value
-
-        if x[node._feature_index] <= node._threshold:
-            return self._walk_tree(node._left, x)
-        return self._walk_tree(node._right, x)
+        while not self._is_leaf(node):
+            if x[node._feature_index] <= node._threshold:
+                node = node._left
+            else:
+                node = node._right
+        return node._value
 
     def _split(self, x: NDArray, y: NDArray, current_depth: int) -> Node:
-        '''
-        The main idea is given the original set S
-        We need to find the best 2 splits for the data, in order to minimize
-        the entropy/ maximize the information gain
-
-        By splitting the data, we mean taking one attribute of the input vector
-        And verifying it for each individual value, calculating information gain
-        and checking which one is maximum.
-
-        After computing the maximum, we run this algorithm again with
-        _split(S_Left)
-        _split(S_Right)
-
-        And somehow, at the end
-        Make the big fucking tree
-        '''
-        if self._check_finalized_condition(current_depth, x, 0) is True:
+        if self._check_finalized_condition(current_depth, x.shape[0]):
             return self._make_leaf(y, current_depth, "stop criterion")
-        if len(np.unique(y)) == 1:
+
+        classes, y_idx = np.unique(y, return_inverse=True)
+        if len(classes) == 1:
             return self._make_leaf(y, current_depth, "pure")
 
-        best_gain = 0.0
-        best_feature_idx = None
-        best_threshold = None
-        best_left_mask = None
-        best_right_mask = None
-        n_dimensions = x.shape[1]
-
-        for i in range(n_dimensions):
-            feature_column = x[:, i]
-            unique_values = np.unique(feature_column)
-            for threshold in unique_values:
-                left_mask = feature_column <= threshold
-                right_mask = feature_column > threshold
-                if len(y[left_mask]) == 0 or len(y[right_mask]) == 0:
-                    continue
-                gain = self._information_gain(y, y[left_mask], y[right_mask])
-                if gain > best_gain:
-                    best_gain = gain
-                    best_feature_idx = i
-                    best_threshold = threshold
-                    best_left_mask = left_mask
-                    best_right_mask = right_mask
+        best_gain, best_feature_idx, best_threshold = self._best_split(
+            x, y_idx, len(classes)
+        )
 
         if best_feature_idx is None:
             return self._make_leaf(y, current_depth, "no gain")
 
-        self._stats.importances[best_feature_idx] += (
-            len(y) / self._stats.n_train * float(best_gain)
+        min_gain = self._heuristics.get(
+            StoppageHeuristic.LOSS_FUNCTION_DECREASE
         )
-        logger.debug(
-            "SPLIT depth=%d feature=%d threshold=%.4f gain=%.4f left=%d right=%d",
-            current_depth, best_feature_idx, best_threshold, best_gain,
-            best_left_mask.sum(), best_right_mask.sum(),
-        )
+        if min_gain is not None and best_gain <= min_gain:
+            return self._make_leaf(y, current_depth, "gain too small")
 
-        x_left, y_left = x[best_left_mask], y[best_left_mask]
-        x_right, y_right = x[best_right_mask], y[best_right_mask]
-        left_child = self._split(x_left, y_left, current_depth + 1)
-        right_child = self._split(x_right, y_right, current_depth + 1)
+        left_mask = x[:, best_feature_idx] <= best_threshold
+        right_mask = ~left_mask
+
+        self._stats.importances[best_feature_idx] += (
+            len(y) / self._stats.n_train * best_gain
+        )
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "SPLIT depth=%d feature=%d threshold=%.4f gain=%.4f "
+                "left=%d right=%d",
+                current_depth, best_feature_idx, best_threshold, best_gain,
+                left_mask.sum(), right_mask.sum(),
+            )
+
+        left_child = self._split(x[left_mask], y[left_mask], current_depth + 1)
+        right_child = self._split(
+            x[right_mask], y[right_mask], current_depth + 1
+        )
         return Node(feature_index=best_feature_idx,
                     threshold=best_threshold,
                     left=left_child,
                     right=right_child)
+
+    def _best_split(
+            self,
+            x: NDArray,
+            y_idx: NDArray,
+            n_classes: int
+    ) -> tuple[float, int | None, Any]:
+        n, d = x.shape
+        onehot = np.eye(n_classes)[y_idx]
+        total = onehot.sum(axis=0)
+        parent_h = float(self._entropy_from_counts(total[None, :],
+                                                   np.array([n]))[0])
+
+        left_n = np.arange(1, n, dtype=np.float64)
+        right_n = n - left_n
+
+        best_gain = 0.0
+        best_feature = None
+        best_threshold = None
+
+        for j in range(d):
+            col = x[:, j]
+            order = np.argsort(col, kind="stable")
+            xs = col[order]
+
+            valid = xs[:-1] < xs[1:]
+            if not valid.any():
+                continue
+
+            left = np.cumsum(onehot[order], axis=0)[:-1]
+            right = total - left
+
+            child_h = (
+                left_n * self._entropy_from_counts(left, left_n)
+                + right_n * self._entropy_from_counts(right, right_n)
+            ) / n
+            gain = parent_h - child_h
+            gain[~valid] = -np.inf
+
+            i = int(np.argmax(gain))
+            if gain[i] > best_gain:
+                best_gain = float(gain[i])
+                best_feature = j
+                best_threshold = xs[i]
+
+        return best_gain, best_feature, best_threshold
+
+    @staticmethod
+    def _entropy_from_counts(counts: NDArray, totals: NDArray) -> NDArray:
+        p = counts / totals[:, None]
+        log_p = np.log2(p, out=np.zeros_like(p), where=p > 0)
+        return -(p * log_p).sum(axis=1)
+
+    def _check_finalized_condition(self, current_depth: int, n_samples: int):
+        for key, value in self._heuristics.items():
+            match key:
+                case StoppageHeuristic.DEPTH:
+                    if current_depth >= value:
+                        return True
+                case StoppageHeuristic.LEAF_SIZE:
+                    if n_samples < value:
+                        return True
+        return False
 
     def _make_leaf(self, y: NDArray, depth: int, reason: str) -> Node:
         label = self._most_common_label(y)
@@ -178,7 +218,8 @@ class DecisionTree(IClassifier):
         depths = np.array(s.leaf_depths)
         sizes = np.array(s.leaf_sizes)
         logger.info(
-            "Fit in %.3fs | nodes=%d leaves=%d | max depth=%d, mean leaf depth=%.2f",
+            "Fit in %.3fs | nodes=%d leaves=%d | max depth=%d, "
+            "mean leaf depth=%.2f",
             s.fit_time, self._count_nodes(self._dt), len(depths),
             depths.max(), depths.mean(),
         )
@@ -192,81 +233,6 @@ class DecisionTree(IClassifier):
             ", ".join(f"#{i} ({s.importances[i]:.3f})"
                       for i in top if s.importances[i] > 0),
         )
-
-    def _information_gain(
-            self,
-            y_parent: NDArray,
-            y_left: NDArray,
-            y_right: NDArray) -> np.float32:
-
-        n_total = len(y_parent)
-        n_left = len(y_left)
-        n_right = len(y_right)
-
-        h_s = self._entropy(y_parent)
-        h_l = self._entropy(y_left)
-        h_r = self._entropy(y_right)
-
-        weighted_left = h_l * (n_left / n_total)
-        weighted_right = h_r * (n_right / n_total)
-
-        return np.float32(h_s - (weighted_left + weighted_right))
-
-    def _entropy(self, labels: NDArray) -> np.float32:
-        if labels.size == 0:
-            return 0.0
-        _, counts = np.unique(labels, return_counts=True)
-        probs = counts / len(labels)
-
-        h = 0.0
-        for p in probs:
-            if p > 0:
-                h -= p * np.log2(p)
-        return h
-
-    def _check_finalized_condition(
-            self,
-            current_depth,
-            x: NDArray,
-            current_loss
-    ):
-        keys = self._heuristics.keys()
-        for key in keys:
-            match key:
-                case StoppageHeuristic.DEPTH:
-                    value = self._heuristics[key]
-                    if self._apply_depth_criterion(
-                            value,
-                            current_depth
-                    ) is False:
-                        return False
-                    continue
-                case StoppageHeuristic.LEAF_SIZE:
-                    value = self._heuristics[key]
-                    if self._apply_leaf_criterion(x, value) is False:
-                        return False
-                    continue
-                case StoppageHeuristic.LOSS_FUNCTION_DECREASE:
-                    value = self._heuristics[key]
-                    if self._apply_loss_criterion(current_loss, value) is False:
-                        return False
-                    continue
-                case _:
-                    return False
-        return True
-
-    def _apply_depth_criterion(self, tree_depth, current_depth) -> bool:
-        if tree_depth <= current_depth:
-            return True
-        return False
-
-    def _apply_leaf_criterion(self, x, leaf_size) -> bool:
-        return x.shape[0] < leaf_size
-
-    def _apply_loss_criterion(self, current_loss, loss) -> bool:
-        if current_loss <= loss:
-            return True
-        return False
 
     def _most_common_label(self, y) -> Any:
         labels, counts = np.unique(y, return_counts=True)
