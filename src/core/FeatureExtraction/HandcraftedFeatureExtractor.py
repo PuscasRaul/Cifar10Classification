@@ -7,36 +7,34 @@ from src.core.FeatureExtraction.IFeatureExtractor import IFeatureExtractor
 
 class HandcraftedFeatureExtractor(IFeatureExtractor):
 
+    def __init__(self, k: int) -> None:
+        IFeatureExtractor.__init__(self, k)
+
     def feature_extraction(self, x: NDArray) -> NDArray | None:
         """
         Computes hog features and extracts the first sqrt(feature_dim) PC
         @input x: vector of elements, where each element is flattened
         """
-        features = self._hog_features(x)  # K x no_of_hog_features
-        first_color_moments = self._first_color_moment(x)
-        second_color_moments = self._second_color_moment(
-            x,
-            first_color_moments
-        )
-        third_color_moments = self._third_color_moment(
-            x,
-            first_color_moments,
-            second_color_moments
-        )
+        K, w, _, _ = np.shape(x)
+        red_values = np.reshape(x[:, :, :, 0], (K, w ** 2))
+        green_values = np.reshape(x[:, :, :, 1], (K, w ** 2))
+        blue_values = np.reshape(x[:, :, :, 2], (K, w ** 2))
 
-        # I hope this works, but I can check I guess?
-        np.concatenate(
+        features = self._hog_features(x)  # K x no_of_hog_features
+        pc_features = self.PCA(features, key="HOG")
+        red_features = self.PCA(red_values, key="RED")
+        green_features = self.PCA(green_values, key="GREEN")
+        blue_features = self.PCA(blue_values, key="BLUE")
+
+        return np.concatenate(
             [
-                features,
-                first_color_moments,
-                second_color_moments,
-                third_color_moments
+                pc_features,
+                red_features,
+                green_features,
+                blue_features
             ],
             axis=1
         )
-
-        primary_components = self.PCA(features)
-        return np.matmul(features, primary_components)
 
     # TODO: this does not particularly pair well with HOG, since that
     #       requires greyscale images

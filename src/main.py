@@ -14,7 +14,6 @@ from src.core.FeatureExtraction.HandcraftedFeatureExtractor import (
 from src.core.Classifier.RandomForest import RandomForest
 from src.core.metrics import evaluate
 from src.core.models.Settings import settings
-from src.core.Preprocessing.PreprocessorV1 import PreprocessorV1
 
 pudb_logger = logging.getLogger("pudb")
 pudb_logger.setLevel(logging.INFO)
@@ -31,27 +30,31 @@ test_file = gl.glob(database_root_dir + "/" + "test_batch")
 loaded_db = [CifarDataset(file) for file in databse_files]
 test_db = [CifarDataset(test) for test in test_file]
 
-pre_processor = PreprocessorV1(32)
-feature_extractor = HandcraftedFeatureExtractor()
+# Add a normalization process?
+# Normalization is done so that all the images have a common scale,
+# it allows the models to work as a normal distribution.
+
+# x_normalized = (x^(j) - min^(j)) / max^(j) - min^(j)
+
+feature_extractor = HandcraftedFeatureExtractor(100)
 
 # TODO: Maybe ask some AI about what depth is common
 dt_stoppage: dict[StoppageHeuristic, Any] = {
-   StoppageHeuristic.DEPTH: 10
+    StoppageHeuristic.DEPTH: 15,
 }
 
 rf_stoppage: dict[StoppageHeuristic, Any] = {
-   StoppageHeuristic.DEPTH: 15
+    StoppageHeuristic.LEAF_SIZE: 30
 }
 
-NO_OF_FOREST_TREES = 50
+NO_OF_FOREST_TREES = 100
 
 
 def main():
     train_x = np.concatenate([db.get_X() for db in loaded_db], axis=0)
     train_y = np.concatenate([db.get_Y() for db in loaded_db], axis=0)
 
-    processed = pre_processor.process_vectors(train_x)
-    features = feature_extractor.feature_extraction(processed)
+    features = feature_extractor.feature_extraction(train_x)
 
     forest_trees = []
     k_subsamples = round(np.sqrt(np.shape(features)[-1]))
@@ -61,7 +64,7 @@ def main():
         )
 
     dt = DecisionTree(dt_stoppage)
-    rf = RandomForest(forest_trees, sample_ratio=0.50)
+    rf = RandomForest(forest_trees, sample_ratio=0.75)
 
     rf.fit(features, train_y)
     dt.fit(features, train_y)
@@ -73,9 +76,8 @@ def main():
     test_x = np.concatenate([db.get_X() for db in test_db], axis=0)
     test_y = np.concatenate([db.get_Y() for db in test_db], axis=0)
 
-    test_processed = pre_processor.process_vectors(test_x)
     test_features = feature_extractor.feature_extraction(
-        test_processed
+        test_x
     )
 
     evaluate(dt, test_features, test_y, "test")
