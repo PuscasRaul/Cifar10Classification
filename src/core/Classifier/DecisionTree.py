@@ -10,8 +10,6 @@ from numpy.typing import NDArray
 
 from src.core.Classifier.IClassifier import IClassifier
 
-logger = logging.getLogger(__name__)
-
 
 class StoppageHeuristic(enum.Enum):
     DEPTH = 0
@@ -55,7 +53,6 @@ class DecisionTree(IClassifier):
         self._heuristics = heuristics
         self._stats = TreeStats()
         self._k_sample_dim = k_sample_dimensions
-        self._rng = np.random.default_rng()
 
     @property
     def stats(self) -> TreeStats:
@@ -125,6 +122,7 @@ class DecisionTree(IClassifier):
         self._stats.importances[best_feature_idx] += (
             len(y) / self._stats.n_train * best_gain
         )
+        """
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(
                 "SPLIT depth=%d feature=%d threshold=%.4f gain=%.4f "
@@ -132,7 +130,7 @@ class DecisionTree(IClassifier):
                 current_depth, best_feature_idx, best_threshold, best_gain,
                 left_mask.sum(), right_mask.sum(),
             )
-
+        """
         left_child = self._split(x[left_mask], y[left_mask], current_depth + 1)
         right_child = self._split(
             x[right_mask], y[right_mask], current_depth + 1
@@ -151,7 +149,8 @@ class DecisionTree(IClassifier):
         # i forgot about the reasoning
 
         if self._k_sample_dim is not None:
-            candidate_features = self._rng.choice(
+            rng = np.random.default_rng()
+            candidate_features = rng.choice(
                     n_features,
                     size=self._k_sample_dim,
                     replace=False
@@ -226,18 +225,21 @@ class DecisionTree(IClassifier):
         label = self._most_common_label(y)
         self._stats.leaf_depths.append(depth)
         self._stats.leaf_sizes.append(len(y))
+        """
         if logger.isEnabledFor(logging.DEBUG):
             _, counts = np.unique(y, return_counts=True)
             logger.debug(
                 "LEAF  depth=%d n=%d label=%s purity=%.2f reason=%s",
                 depth, len(y), label, counts.max() / len(y), reason,
             )
+        """
         return Node(value=label)
 
     def _log_fit_summary(self) -> None:
         s = self._stats
         depths = np.array(s.leaf_depths)
         sizes = np.array(s.leaf_sizes)
+        """
         logger.info(
             "Fit in %.3fs | nodes=%d leaves=%d | max depth=%d, "
             "mean leaf depth=%.2f",
@@ -248,12 +250,15 @@ class DecisionTree(IClassifier):
             "Leaf size: min=%d mean=%.1f max=%d",
             sizes.min(), sizes.mean(), sizes.max(),
         )
+        """
         top = np.argsort(s.importances)[::-1][:5]
+        """
         logger.info(
             "Top features: %s",
             ", ".join(f"#{i} ({s.importances[i]:.3f})"
                       for i in top if s.importances[i] > 0),
         )
+        """
 
     def _most_common_label(self, y) -> Any:
         labels, counts = np.unique(y, return_counts=True)

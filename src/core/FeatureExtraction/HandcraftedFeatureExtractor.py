@@ -12,26 +12,32 @@ class HandcraftedFeatureExtractor(IFeatureExtractor):
 
     def feature_extraction(self, x: NDArray) -> NDArray | None:
         """
-        Computes hog features and extracts the first sqrt(feature_dim) PC
+        Computes hog features and extracts the first k
         @input x: vector of elements, where each element is flattened
         """
-        K, w, _, _ = np.shape(x)
-        red_values = np.reshape(x[:, :, :, 0], (K, w ** 2))
-        green_values = np.reshape(x[:, :, :, 1], (K, w ** 2))
-        blue_values = np.reshape(x[:, :, :, 2], (K, w ** 2))
+        K, w, _, c = np.shape(x)
+        pixel_values = np.reshape(x, (K, w ** 2 * c))
 
         features = self._hog_features(x)  # K x no_of_hog_features
         pc_features = self.PCA(features, key="HOG")
-        red_features = self.PCA(red_values, key="RED")
-        green_features = self.PCA(green_values, key="GREEN")
-        blue_features = self.PCA(blue_values, key="BLUE")
+        # color_features = self.PCA(pixel_values, key="COLOR")
+        first_color_moments = self._first_color_moment(x)
+        second_color_moments = self._second_color_moment(
+            x,
+            first_color_moments
+        )
+        third_color_moments = self._third_color_moment(
+            x,
+            first_color_moments,
+            second_color_moments
+        )
 
         return np.concatenate(
             [
                 pc_features,
-                red_features,
-                green_features,
-                blue_features
+                first_color_moments,
+                second_color_moments,
+                third_color_moments
             ],
             axis=1
         )

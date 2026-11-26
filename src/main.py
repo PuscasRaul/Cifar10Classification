@@ -3,6 +3,7 @@ import glob as gl
 import logging
 import os
 import matplotlib.pyplot
+import multiprocessing as mp
 import numpy as np
 from typing import Any
 
@@ -34,9 +35,10 @@ test_db = [CifarDataset(test) for test in test_file]
 # Normalization is done so that all the images have a common scale,
 # it allows the models to work as a normal distribution.
 
+# So a variance?
 # x_normalized = (x^(j) - min^(j)) / max^(j) - min^(j)
 
-feature_extractor = HandcraftedFeatureExtractor(100)
+feature_extractor = HandcraftedFeatureExtractor(200)
 
 # TODO: Maybe ask some AI about what depth is common
 dt_stoppage: dict[StoppageHeuristic, Any] = {
@@ -44,7 +46,7 @@ dt_stoppage: dict[StoppageHeuristic, Any] = {
 }
 
 rf_stoppage: dict[StoppageHeuristic, Any] = {
-    StoppageHeuristic.LEAF_SIZE: 30
+    StoppageHeuristic.DEPTH: 10
 }
 
 NO_OF_FOREST_TREES = 100
@@ -53,8 +55,13 @@ NO_OF_FOREST_TREES = 100
 def main():
     train_x = np.concatenate([db.get_X() for db in loaded_db], axis=0)
     train_y = np.concatenate([db.get_Y() for db in loaded_db], axis=0)
-
     features = feature_extractor.feature_extraction(train_x)
+
+    test_x = np.concatenate([db.get_X() for db in test_db], axis=0)
+    test_y = np.concatenate([db.get_Y() for db in test_db], axis=0)
+    test_features = feature_extractor.feature_extraction(
+        test_x
+    )
 
     forest_trees = []
     k_subsamples = round(np.sqrt(np.shape(features)[-1]))
@@ -63,26 +70,17 @@ def main():
             DecisionTree(rf_stoppage,  k_subsamples)
         )
 
-    dt = DecisionTree(dt_stoppage)
     rf = RandomForest(forest_trees, sample_ratio=0.75)
-
     rf.fit(features, train_y)
-    dt.fit(features, train_y)
-
-    evaluate(dt, features, train_y, "train")
     evaluate(rf, features, train_y, "train")
-    # TODO: extract that into a function atleast
-
-    test_x = np.concatenate([db.get_X() for db in test_db], axis=0)
-    test_y = np.concatenate([db.get_Y() for db in test_db], axis=0)
-
-    test_features = feature_extractor.feature_extraction(
-        test_x
-    )
-
-    evaluate(dt, test_features, test_y, "test")
     evaluate(rf, test_features, test_y, "test")
+
+    # dt = DecisionTree(dt_stoppage)
+    # dt.fit(features, train_y)
+    # evaluate(dt, features, train_y, "train")
+    # evaluate(dt, test_features, test_y, "test")
 
 
 if __name__ == "__main__":
+    mp.set_start_method("fork", force=True)
     main()

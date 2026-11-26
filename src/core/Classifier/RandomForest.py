@@ -1,17 +1,48 @@
-import asyncio
 from collections.abc import Sequence
 import logging
 import numpy as np
+import math
+from multiprocessing import Pool
 from numpy.typing import NDArray
 from typing import Any
 
 from src.core.Classifier.DecisionTree import (
     DecisionTree,
-    StoppageHeuristic
 )
 from src.core.Classifier.IClassifier import IClassifier
 
 logger = logging.getLogger()
+NO_OF_WORKERS = 10
+
+
+def _subsample(
+        x: NDArray,
+        y: NDArray,
+        ratio=1.0
+) -> tuple[NDArray, NDArray]:
+    dataset_size = np.shape(x)[0]
+    n_sample = round(dataset_size * ratio)
+
+    rng = np.random.default_rng()
+    indexes = rng.integers(low=0, high=dataset_size, size=n_sample)
+    x_sample = [x[index] for index in indexes]
+    y_sample = [y[index] for index in indexes]
+
+    return tuple((np.array(x_sample), np.array(y_sample)))
+
+
+def _fit_chunk(
+        trees: Sequence[DecisionTree],
+        x: NDArray,
+        y: NDArray,
+        ratio
+):
+    fitted_trees: list[DecisionTree] = []
+    for tree in trees:
+        x_subsample, y_subsample = _subsample(x, y, ratio)
+        tree.fit(x_subsample, y_subsample)
+        fitted_trees.append(tree)
+    return fitted_trees
 
 
 class RandomForest(IClassifier):
@@ -47,25 +78,17 @@ class RandomForest(IClassifier):
         return output_label
 
     def fit(self, x: NDArray, y: NDArray) -> None:
-        for tree in self._trees:
-            self._fit_one_tree(x, y, tree)
+        pool = Pool(processes=NO_OF_WORKERS)
+        num_workers = min(NO_OF_WORKERS, len(self._trees))
+        chunk_size = math.ceil(len(self._trees) / num_workers)
+        ratio = self._ratio
 
-    def _fit_one_tree(self, x, y, tree):
-        x_subsample, y_subsample = self._subsample(x, y, self._ratio)
-        tree.fit(x_subsample, y_subsample)
+        tasks = [
+            (self._trees[i: i + chunk_size], x, y, ratio)
+            for i in range(0, len(self._trees), chunk_size)
+        ]
 
-    def _subsample(
-            self,
-            x: NDArray,
-            y: NDArray,
-            ratio=1.0
-    ) -> tuple[NDArray, NDArray]:
-        dataset_size = np.shape(x)[0]
-        n_sample = round(dataset_size * ratio)
-
-        rng = np.random.default_rng()
-        indexes = rng.integers(low=0, high=dataset_size, size=n_sample)
-        x_sample = [x[index] for index in indexes]
-        y_sample = [y[index] for index in indexes]
-
-        return tuple((np.array(x_sample), np.array(y_sample)))
+        fitted_chunks = pool.starmap(_fit_chunk, tasks)
+        self._trees = [tree for chunk in fitted_chunks for tree in chunk]
+        pool.close()
+        pool.join()

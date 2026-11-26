@@ -21,7 +21,6 @@ class IFeatureExtractor(ABC):
     def feature_extraction(
             self,
             x: NDArray,
-            pca_keys: list[str] | None = None
     ) -> NDArray | None:
         return None
 
@@ -32,7 +31,7 @@ class IFeatureExtractor(ABC):
             arr -> numpy NDArray to compute PCA for
             k -> number of principal axis components to keep
         output:
-            y -> NDArray of principal axis components
+            y -> NDArray after Principal components * x
         '''
         arr = x.astype(float)
         result = self._PCA_result.get(key, None)
@@ -57,7 +56,7 @@ class IFeatureExtractor(ABC):
         eigenvalues = principal_values[order]
         principal_axis = np.array(principal_axis)
         principal_axis = principal_axis[:, order]
-        principal_axis = principal_axis[:, self._k]
+        principal_axis = principal_axis[:, :self._k]
 
         if settings.show_plots is True:
             self._plot_information_conservation(eigenvalues, self._k)
@@ -68,7 +67,7 @@ class IFeatureExtractor(ABC):
             primary_axis=principal_axis
             )
 
-        return np.matmul(arr, principal_axis)
+        return np.matmul(x, principal_axis)
 
     def _plot_information_conservation(
             self,
